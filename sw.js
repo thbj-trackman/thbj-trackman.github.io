@@ -19,7 +19,7 @@ self.addEventListener("install", (event) => {
           throw new Error(`Failed to precache required asset: ${url}`);
         }
 
-        await cache.put(url, response);
+        await cache.put(url, response.clone());
       }
 
       await Promise.all(
@@ -27,7 +27,7 @@ self.addEventListener("install", (event) => {
           fetch(url, { cache: "no-cache" })
             .then((response) => {
               if (response.ok) {
-                return cache.put(url, response);
+                return cache.put(url, response.clone());
               }
 
               return undefined;
@@ -67,25 +67,37 @@ self.addEventListener("fetch", (event) => {
         return cachedResponse;
       }
 
-      return fetch(event.request).catch(() => {
-        if (event.request.mode === "navigate") {
-          return caches.match("/index.html").then((response) => {
-            if (response) {
-              return response;
-            }
+      return fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const responseClone = response.clone();
 
-            return new Response("Offline", {
-              status: 503,
-              statusText: "Service Unavailable",
-              headers: {
-                "Content-Type": "text/plain; charset=utf-8"
-              }
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
             });
-          });
-        }
+          }
 
-        return Response.error();
-      });
+          return response;
+        })
+        .catch(() => {
+          if (event.request.mode === "navigate") {
+            return caches.match("/index.html").then((response) => {
+              if (response) {
+                return response;
+              }
+
+              return new Response("Offline", {
+                status: 503,
+                statusText: "Service Unavailable",
+                headers: {
+                  "Content-Type": "text/plain; charset=utf-8"
+                }
+              });
+            });
+          }
+
+          return Response.error();
+        });
     })
   );
 });
