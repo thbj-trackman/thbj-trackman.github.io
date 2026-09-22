@@ -73,6 +73,42 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (isCacheableResponse(response)) {
+            const responseClone = response.clone();
+
+            event.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => {
+                return cache.put(event.request, responseClone);
+              })
+            );
+          }
+
+          return response;
+        })
+        .catch(() =>
+          caches.match("/index.html").then((response) => {
+            if (response) {
+              return response;
+            }
+
+            return new Response("Offline", {
+              status: 503,
+              statusText: "Service Unavailable",
+              headers: {
+                "Content-Type": "text/plain; charset=utf-8"
+              }
+            });
+          })
+        )
+    );
+
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
@@ -93,25 +129,7 @@ self.addEventListener("fetch", (event) => {
 
           return response;
         })
-        .catch(() => {
-          if (event.request.mode === "navigate") {
-            return caches.match("/index.html").then((response) => {
-              if (response) {
-                return response;
-              }
-
-              return new Response("Offline", {
-                status: 503,
-                statusText: "Service Unavailable",
-                headers: {
-                  "Content-Type": "text/plain; charset=utf-8"
-                }
-              });
-            });
-          }
-
-          return Response.error();
-        });
+        .catch(() => Response.error());
     })
   );
 });
