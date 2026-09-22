@@ -1,7 +1,9 @@
 const CACHE_NAME = "tour-server-cache-v1";
-const PRECACHE_URLS = [
+const REQUIRED_CACHE_URLS = [
   "/",
-  "/index.html",
+  "/index.html"
+];
+const OPTIONAL_CACHE_URLS = [
   "/manifest.json",
   "/icon-192.png",
   "/icon-512.png"
@@ -9,9 +11,19 @@ const PRECACHE_URLS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      Promise.all(
-        PRECACHE_URLS.map((url) =>
+    caches.open(CACHE_NAME).then(async (cache) => {
+      for (const url of REQUIRED_CACHE_URLS) {
+        const response = await fetch(url, { cache: "no-cache" });
+
+        if (!response.ok) {
+          throw new Error(`Failed to precache required asset: ${url}`);
+        }
+
+        await cache.put(url, response);
+      }
+
+      await Promise.all(
+        OPTIONAL_CACHE_URLS.map((url) =>
           fetch(url, { cache: "no-cache" })
             .then((response) => {
               if (response.ok) {
@@ -22,8 +34,8 @@ self.addEventListener("install", (event) => {
             })
             .catch(() => undefined)
         )
-      )
-    )
+      );
+    })
   );
   self.skipWaiting();
 });
@@ -57,7 +69,19 @@ self.addEventListener("fetch", (event) => {
 
       return fetch(event.request).catch(() => {
         if (event.request.mode === "navigate") {
-          return caches.match("/index.html");
+          return caches.match("/index.html").then((response) => {
+            if (response) {
+              return response;
+            }
+
+            return new Response("Offline", {
+              status: 503,
+              statusText: "Service Unavailable",
+              headers: {
+                "Content-Type": "text/plain; charset=utf-8"
+              }
+            });
+          });
         }
 
         return Response.error();
