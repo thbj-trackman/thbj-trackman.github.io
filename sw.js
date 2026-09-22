@@ -9,48 +9,60 @@ const OPTIONAL_CACHE_URLS = [
   "/icon-512.png"
 ];
 
+function isCacheableResponse(response) {
+  return Boolean(
+    response &&
+      response.type !== "error" &&
+      (response.ok || response.status === 0 || response.status < 400)
+  );
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      for (const url of REQUIRED_CACHE_URLS) {
-        const response = await fetch(url, { cache: "no-cache" });
+    caches
+      .open(CACHE_NAME)
+      .then(async (cache) => {
+        for (const url of REQUIRED_CACHE_URLS) {
+          const response = await fetch(url, { cache: "no-cache" });
 
-        if (!response.ok) {
-          throw new Error(`Failed to precache required asset: ${url}`);
+          if (!isCacheableResponse(response)) {
+            throw new Error(`Failed to precache required asset: ${url}`);
+          }
+
+          await cache.put(url, response.clone());
         }
 
-        await cache.put(url, response.clone());
-      }
+        await Promise.all(
+          OPTIONAL_CACHE_URLS.map((url) =>
+            fetch(url, { cache: "no-cache" })
+              .then((response) => {
+                if (isCacheableResponse(response)) {
+                  return cache.put(url, response.clone());
+                }
 
-      await Promise.all(
-        OPTIONAL_CACHE_URLS.map((url) =>
-          fetch(url, { cache: "no-cache" })
-            .then((response) => {
-              if (response.ok) {
-                return cache.put(url, response.clone());
-              }
-
-              return undefined;
-            })
-            .catch(() => undefined)
-        )
-      );
-    })
+                return undefined;
+              })
+              .catch(() => undefined)
+          )
+        );
+      })
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) =>
-      Promise.all(
-        cacheNames
-          .filter((cacheName) => cacheName !== CACHE_NAME)
-          .map((cacheName) => caches.delete(cacheName))
+    caches
+      .keys()
+      .then((cacheNames) =>
+        Promise.all(
+          cacheNames
+            .filter((cacheName) => cacheName !== CACHE_NAME)
+            .map((cacheName) => caches.delete(cacheName))
+        )
       )
-    )
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -69,12 +81,14 @@ self.addEventListener("fetch", (event) => {
 
       return fetch(event.request)
         .then((response) => {
-          if (response.ok) {
+          if (isCacheableResponse(response)) {
             const responseClone = response.clone();
 
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
-            });
+            event.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => {
+                return cache.put(event.request, responseClone);
+              })
+            );
           }
 
           return response;
