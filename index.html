@@ -1,15 +1,35 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Redirecting…</title>
-  <meta http-equiv="refresh" content="0; url=http://10.8.65.46:9500/">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tour Server Redirect</title>
+  
+  <!-- PWA Requirements -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ffffff">
   <link rel="canonical" href="http://10.8.65.46:9500/">
+
+  <!-- Meta Refresh fallback set to 5 seconds -->
+  <meta http-equiv="refresh" content="5; url=http://10.8.65.46:9500/">
+
   <script>
-    window.location.replace("http://10.8.65.46:9500/);
+    // 5-second countdown & redirect via JavaScript
+    setTimeout(function() {
+      window.location.href = "http://10.8.65.46:9500/";
+    }, 5000);
+
+    // Register Service Worker for PWA compliance
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+          console.error('Service Worker registration failed:', err);
+        });
+      });
+    }
   </script>
 </head>
 <body>
-  <p>Redirecting to <a href="http://10.8.65.46:9500/">Tour Server</a>…</p>
+  <p>Redirecting to <a href="http://10.8.65.46:9500/">Tour Server</a> in 5 seconds…</p>
 </body>
 </html>
